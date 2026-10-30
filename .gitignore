@@ -1,6 +1,6 @@
 *.xlsx
 *.xls
 .vercel
-
-.vercel
 .env*
+node_modules
+.claude
