@@ -170,7 +170,8 @@ const BILL_FIRST_ITEM = '이사연결';
 
 let prev = null, cur = null, savedAt = null;
 let rows = [];                     // 센터별 비교 행
-let tab = 'branch', filterBranch = '', filterMgr = '';
+let tab = 'branch';
+const filters = { manager: { branch: '' }, center: { branch: '', mgr: '' } }; // 탭마다 따로 유지
 let sort = { key: null, dir: -1 };
 
 const $ = id => document.getElementById(id);
@@ -391,20 +392,21 @@ function renderTab() {
   const depts = [...new Set(rows.map(r => r.dept))].sort((a, b) => a.localeCompare(b, 'ko'));
   const sel = (id, label, opts, val) => `<label>${label} <select id="${id}"><option value="">전체</option>` +
     opts.map(o => `<option${o === val ? ' selected' : ''}>${esc(o)}</option>`).join('') + `</select></label>`;
-  let list = rows.filter(r => !filterBranch || r.dept === filterBranch);
+  const f = filters[tab];
+  let list = rows.filter(r => !f?.branch || r.dept === f.branch);
 
   let tb = '';
-  if (tab !== 'branch') tb += sel('fBranch', '지사', depts, filterBranch);
+  if (f) tb += sel('fBranch', '지사', depts, f.branch);
   if (tab === 'center') {
     const mgrs = [...new Set(list.map(r => r.mgr))].sort((a, b) => a.localeCompare(b, 'ko'));
-    if (!mgrs.includes(filterMgr)) filterMgr = '';
-    tb += sel('fMgr', '담당', mgrs, filterMgr);
-    list = list.filter(r => !filterMgr || r.mgr === filterMgr);
+    if (!mgrs.includes(f.mgr)) f.mgr = '';
+    tb += sel('fMgr', '담당', mgrs, f.mgr);
+    list = list.filter(r => !f.mgr || r.mgr === f.mgr);
   }
   tb += `<span style="margin-left:auto">행을 누르면 ${tab === 'center' ? '상세 내역' : '하위 목록'}을 볼 수 있습니다</span>`;
   $('toolbar').innerHTML = tb;
-  $('fBranch')?.addEventListener('change', e => { filterBranch = e.target.value; filterMgr = ''; renderTab(); });
-  $('fMgr')?.addEventListener('change', e => { filterMgr = e.target.value; renderTab(); });
+  $('fBranch')?.addEventListener('change', e => { f.branch = e.target.value; if ('mgr' in f) f.mgr = ''; renderTab(); });
+  $('fMgr')?.addEventListener('change', e => { f.mgr = e.target.value; renderTab(); });
 
   const diffHead = prev ? `<th class="sortable" data-sort="diff">전월 대비${arrow('diff')}</th>` : '';
   const diffTd = d => prev ? `<td>${chip(d, false)}</td>` : '';
@@ -532,8 +534,9 @@ $('tabbody').addEventListener('click', e => {
   const tr = e.target.closest('tr.click');
   if (!tr) return;
   if (tr.dataset.code) { $('q').value = tr.dataset.code; update(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-  filterBranch = tr.dataset.dept; filterMgr = tr.dataset.mgr || '';
-  tab = tab === 'branch' ? 'manager' : 'center';
+  // 행을 누르면 다음 탭의 필터만 그 행으로 맞춘다
+  if (tab === 'branch') { filters.manager.branch = tr.dataset.dept; tab = 'manager'; }
+  else { filters.center.branch = tr.dataset.dept; filters.center.mgr = tr.dataset.mgr || ''; tab = 'center'; }
   sort = { key: null, dir: -1 };
   renderTab();
 });
