@@ -343,6 +343,15 @@ function buildRows() {
   }
 }
 
+// 기본 출력 순서. 목록에 없는 지사·담당은 맨 뒤에 가나다순으로 붙는다.
+const BRANCH_ORDER = ['수도권팀', '경남지사', '경북지사', '중부지사', '호남지사', '가판'];
+const MGR_ORDER = ['강병수', '김대범', '김경원', '윤홍범', '박경석', '박민규', '홍창섭', '이상훈', '한상윤',
+  '현준호', '김헌우', '장현준', '윤호성', '박상준', '범경수', '유승목', '박현정'];
+const rank = (order, v) => { const i = order.indexOf(v); return i < 0 ? order.length : i; };
+const orderCmp = order => (a, b) => rank(order, a) - rank(order, b) || String(a).localeCompare(String(b), 'ko');
+const byOrg = (a, b) => orderCmp(BRANCH_ORDER)(a.dept, b.dept) || orderCmp(MGR_ORDER)(a.mgr, b.mgr) ||
+  String(a.name ?? '').localeCompare(String(b.name ?? ''), 'ko');
+
 function groupBy(list, keyFn) {
   const m = new Map();
   for (const r of list) {
@@ -389,7 +398,7 @@ function update() {
 
 function renderTab() {
   document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
-  const depts = [...new Set(rows.map(r => r.dept))].sort((a, b) => a.localeCompare(b, 'ko'));
+  const depts = [...new Set(rows.map(r => r.dept))].sort(orderCmp(BRANCH_ORDER));
   const sel = (id, label, opts, val) => `<label>${label} <select id="${id}"><option value="">전체</option>` +
     opts.map(o => `<option${o === val ? ' selected' : ''}>${esc(o)}</option>`).join('') + `</select></label>`;
   const f = filters[tab];
@@ -398,7 +407,7 @@ function renderTab() {
   let tb = '';
   if (f) tb += sel('fBranch', '지사', depts, f.branch);
   if (tab === 'center') {
-    const mgrs = [...new Set(list.map(r => r.mgr))].sort((a, b) => a.localeCompare(b, 'ko'));
+    const mgrs = [...new Set(list.map(r => r.mgr))].sort(orderCmp(MGR_ORDER));
     if (!mgrs.includes(f.mgr)) f.mgr = '';
     tb += sel('fMgr', '담당', mgrs, f.mgr);
     list = list.filter(r => !f.mgr || r.mgr === f.mgr);
@@ -438,7 +447,8 @@ function renderTab() {
 
 function arrow(k) { return sort.key === k ? (sort.dir > 0 ? ' ↑' : ' ↓') : ''; }
 function sorted(list, defKey) {
-  const key = sort.key && (sort.key in (list[0] || {})) ? sort.key : defKey;
+  if (!sort.key) return list.slice().sort(byOrg); // 기본: 지정된 지사·담당 순서
+  const key = (sort.key in (list[0] || {})) ? sort.key : defKey;
   const dir = sort.key === key ? sort.dir : 1;
   return list.slice().sort((a, b) => {
     const x = a[key], y = b[key];
