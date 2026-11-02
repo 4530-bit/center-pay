@@ -1,6 +1,7 @@
 // 업로드된 2개월치 파싱 결과를 비공개 Blob 하나에 저장/조회한다.
 // 새 파일이 올라오기 전까지 모든 사용자가 같은 데이터를 본다.
 import { get, put } from '@vercel/blob';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 const PATH = 'center-pay/data.json';
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -17,6 +18,8 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
+      if (!process.env.UPLOAD_PASSWORD) return res.status(503).json({ error: '업로드 비밀번호가 설정되지 않았습니다.' });
+      if (!passwordOk(req.headers['x-upload-password'])) return res.status(401).json({ error: '업로드 비밀번호가 틀렸습니다.' });
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       if (!isValid(body)) return res.status(400).json({ error: '데이터 형식이 올바르지 않습니다.' });
       body.savedAt = new Date().toISOString();
@@ -35,6 +38,15 @@ export default async function handler(req, res) {
     console.error(e);
     return res.status(500).json({ error: '저장소 처리 중 오류가 발생했습니다.' });
   }
+}
+
+// 헤더로 받은 값은 encodeURIComponent 된 문자열 (한글 비밀번호 허용)
+function passwordOk(header) {
+  let given = '';
+  try { given = decodeURIComponent(String(header || '')); } catch { return false; }
+  const a = createHash('sha256').update(given).digest();
+  const b = createHash('sha256').update(process.env.UPLOAD_PASSWORD).digest();
+  return timingSafeEqual(a, b);
 }
 
 function isValid(b) {
