@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>센터 지대 납부금액 조회</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/icons/favicon.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#2d5be3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="지대 납부">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -31,6 +38,13 @@
   .btn { font: inherit; font-size: 14px; font-weight: 600; padding: 9px 16px; border-radius: 8px; cursor: pointer;
     border: 1px solid var(--line2); background: var(--panel); color: var(--fg); }
   .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .actions { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+  @media (max-width: 640px) { .actions { flex-direction: row; } }
+  .dlg-body { color: var(--sub); font-size: 14px; margin: 10px 0 4px; }
+  .dlg-body ol { margin: 8px 0 0; padding-left: 20px; }
+  .dlg-body li { margin: 6px 0; }
+  .dlg-body b { color: var(--fg); }
+  .dlg-body .alt { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; }
 
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
   .drop { border: 2px dashed var(--line2); border-radius: 12px; background: var(--panel); padding: 36px 20px;
@@ -136,8 +150,19 @@
       <h1>센터 지대 납부금액 조회</h1>
       <div class="status" id="status">불러오는 중…</div>
     </div>
-    <button class="btn" id="replace" hidden>새 파일로 교체</button>
+    <div class="actions">
+      <button class="btn" id="replace" hidden>새 파일로 교체</button>
+      <button class="btn" id="install">바로가기 만들기</button>
+    </div>
   </header>
+
+  <dialog id="installDialog">
+    <form method="dialog">
+      <div class="dlg-title">바로가기 만들기</div>
+      <div class="dlg-body" id="installBody"></div>
+      <div class="dlg-btns" id="installBtns"><button class="btn" value="close">닫기</button></div>
+    </form>
+  </dialog>
 
   <input type="file" id="file" accept=".xlsx,.xls" multiple hidden>
   <label class="drop" id="drop" for="file" hidden>
@@ -594,6 +619,67 @@ $('tabbody').addEventListener('click', e => {
   sort = { key: null, dir: -1 };
   renderTab();
 });
+
+/* ---------- 바로가기 만들기 (앱 설치) ---------- */
+let installPrompt = null;
+const ua = navigator.userAgent;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+const isKakao = /KAKAOTALK/i.test(ua);
+const isAndroid = /Android/i.test(ua);
+const isSamsung = /SamsungBrowser/i.test(ua);
+const isWindows = /Windows/i.test(ua);
+
+if (isStandalone()) $('install').hidden = true; // 이미 바로가기로 연 경우
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; });
+addEventListener('appinstalled', () => { $('install').hidden = true; installPrompt = null; });
+
+$('install').addEventListener('click', async () => {
+  if (installPrompt) {               // 크롬·엣지·안드로이드: 브라우저 설치 창 바로 띄우기
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    installPrompt = null;
+    if (outcome === 'accepted') $('install').hidden = true;
+    return;
+  }
+  showInstallHelp();
+});
+
+function showInstallHelp() {
+  const url = location.origin + '/';
+  let html, extra = '';
+  if (isKakao) {
+    html = `카카오톡 안에서는 바로가기를 만들 수 없습니다. 아래 버튼으로 <b>다른 브라우저에서 연 뒤</b> 다시 「바로가기 만들기」를 눌러주세요.`;
+    extra = `<button class="btn primary" type="button" id="openExternal">다른 브라우저로 열기</button>`;
+  } else if (isIOS) {
+    html = `<ol><li>화면 아래(또는 위)의 <b>공유 버튼</b> <span aria-hidden="true">⬆︎</span>을 누릅니다.</li>
+      <li>목록을 내려 <b>홈 화면에 추가</b>를 누릅니다.</li><li>오른쪽 위 <b>추가</b>를 누르면 홈 화면에 아이콘이 생깁니다.</li></ol>`;
+  } else if (isSamsung) {
+    html = `<ol><li>오른쪽 아래 <b>메뉴(≡)</b>를 누릅니다.</li><li><b>현재 페이지 추가</b> → <b>홈 화면</b>을 누릅니다.</li></ol>`;
+  } else if (isAndroid) {
+    html = `<ol><li>오른쪽 위 <b>메뉴(⋮)</b>를 누릅니다.</li><li><b>홈 화면에 추가</b> 또는 <b>앱 설치</b>를 누릅니다.</li></ol>`;
+  } else {
+    html = `<ol><li>크롬·엣지: 주소창 오른쪽의 <b>설치 아이콘</b>(⊕ 또는 모니터 모양)을 누르거나, 메뉴(⋮ / …) → <b>앱 설치</b> 또는 <b>이 사이트를 앱으로 설치</b>를 누릅니다.</li>
+      <li>설치하면 바탕화면과 시작 메뉴에 아이콘이 생깁니다.</li></ol>
+      <div class="alt">설치 메뉴가 없다면 아래 버튼으로 <b>바탕화면 바로가기 파일</b>을 받아 바탕화면에 두세요.</div>`;
+    extra = `<button class="btn primary" type="button" id="dlShortcut">바로가기 파일 받기</button>`;
+  }
+  $('installBody').innerHTML = html;
+  $('installBtns').innerHTML = extra + '<button class="btn" value="close">닫기</button>';
+  $('openExternal')?.addEventListener('click', () => { location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url); });
+  $('dlShortcut')?.addEventListener('click', () => {
+    const [body, ext] = isWindows || !/Mac/.test(ua)
+      ? [`[InternetShortcut]\r\nURL=${url}\r\n`, 'url']
+      : [`<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>URL</key><string>${url}</string></dict></plist>\n`, 'webloc'];
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([body], { type: 'application/octet-stream' }));
+    a.download = `센터 지대 납부금액 조회.${ext}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  $('installDialog').showModal();
+}
 
 load();
 </script>
