@@ -76,10 +76,11 @@
   @media (max-width: 700px) { .stats > div + div { border-left: none; border-top: 1px solid var(--line); } }
 
   .searchbox { position: relative; margin-bottom: 14px; }
-  .searchbox input { width: 100%; font: inherit; font-size: 17px; padding: 14px 44px 14px 46px; border-radius: 12px;
-    border: 1px solid var(--line2); background: var(--panel); color: var(--fg); }
-  .searchbox input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
-  .searchbox svg { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .searchbox input { width: 100%; font: inherit; font-size: 17px; font-weight: 500; padding: 15px 44px 15px 50px; border-radius: 12px;
+    border: 2px solid var(--accent); background: var(--accent-bg); color: var(--fg); box-shadow: 0 2px 10px rgba(45, 91, 227, .12); }
+  .searchbox input::placeholder { color: var(--accent); opacity: .7; }
+  .searchbox input:focus { outline: 3px solid rgba(45, 91, 227, .25); outline-offset: 1px; background: var(--panel); }
+  .searchbox svg { position: absolute; left: 17px; top: 50%; transform: translateY(-50%); color: var(--accent); }
   .searchbox .clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); border: none; background: none;
     color: var(--muted); font-size: 22px; cursor: pointer; padding: 4px 8px; }
 
@@ -140,6 +141,37 @@
     .stats .v { font-size: 22px; }
     .figs .v { font-size: 24px; }
   }
+  .m-only, .m-cell { display: none; }
+  /* 모바일: 목록은 부가 열(지사·담당)을 숨기고, 상세표는 항목마다 2줄 카드형으로 세워 가로 스크롤 없이 보이게 */
+  @media (max-width: 640px) {
+    .opt { display: none; }
+    .m-only { display: inline; }
+    .tbl th, .tbl td { padding-left: 8px; padding-right: 8px; }
+    .tbl th { white-space: normal; word-break: keep-all; }
+    .tbl td { font-size: 13.5px; }
+    .tbl td .chip { font-size: 12.5px; padding: 2px 6px; }
+    td.name .code { display: block; margin-left: 0; }
+    .tbl.detail { overflow-x: visible; }
+    .detail table, .detail tbody { display: block; }
+    .detail thead { display: none; }
+    .detail tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; row-gap: 2px;
+      padding: 10px 14px; border-bottom: 1px solid var(--line); }
+    .detail tbody tr:last-child { border-bottom: none; }
+    .detail td { padding: 0; border: none; white-space: normal; background: none; }
+    .detail .c-label { grid-column: 1; grid-row: 1; font-weight: 600; }
+    .detail .c-diff { grid-column: 2; grid-row: 1; font-weight: 700; }
+    .detail .c-prev, .detail .c-cur { display: none; }
+    .detail .m-cell { display: block; }
+    .detail .c-vals { grid-column: 1; grid-row: 2; font-size: 13px; color: var(--muted); text-align: left; word-break: keep-all; }
+    .detail .c-eff { grid-column: 2; grid-row: 2; font-size: 13px; }
+    .detail .c-eff::before { content: attr(data-m) " "; color: var(--muted); font-size: 12px; }
+    .detail .c-eff.same { display: none; }
+    .detail .c-diff, .detail .c-eff { white-space: nowrap; text-align: right; }
+    .detail tr.group { display: block; padding: 14px 14px 2px; border-bottom: none; }
+    .detail tr.group td, .detail tr.total td { padding: 0; border: none; background: none; }
+    .detail tr.total { border-top: 2px solid var(--fg); background: var(--bg); border-radius: 0 0 12px 12px; }
+    .detail tr.total .c-label, .detail tr.total .c-diff { font-size: 16px; }
+  }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -152,7 +184,7 @@
     </div>
     <div class="actions">
       <button class="btn" id="replace" hidden>새 파일로 교체</button>
-      <button class="btn" id="install">바로가기 만들기</button>
+      <button class="btn primary" id="install">＋ 바로가기 만들기</button>
     </div>
   </header>
 
@@ -188,7 +220,7 @@
 
     <div class="searchbox">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" type="search" placeholder="센터명 또는 센터코드 검색 (예: 구리, GB859)" autocomplete="off">
+      <input id="q" type="search" placeholder="센터명·코드 검색 (예: 구리, GB859)" autocomplete="off">
       <button class="clear" id="clear" title="지우기" hidden>×</button>
     </div>
 
@@ -493,20 +525,20 @@ function renderTab() {
 
   if (tab === 'center') {
     const data = sorted(list, 'name');
-    head = `<th class="l sortable" data-sort="name">센터${arrow('name')}</th><th class="l">지사</th><th class="l">담당</th>
+    head = `<th class="l sortable" data-sort="name">센터${arrow('name')}</th><th class="l opt">지사</th><th class="l opt">담당</th>
       <th class="sortable" data-sort="pay">${mon(cur.month)} 납부금액${arrow('pay')}</th>${diffHead}`;
     body = data.map(r => `<tr class="click" data-code="${esc(r.code)}"><td class="l name">${esc(r.name)}<span class="code">${esc(r.code)}</span></td>
-      <td class="l">${esc(r.dept)}</td><td class="l">${esc(r.mgr)}</td><td>${r.pay == null ? '<span class="zero">이번달 없음</span>' : won(r.pay)}</td>${diffTd(r.diff)}</tr>`).join('');
-    body += `<tr class="sum"><td class="l">합계</td><td class="l" colspan="2">${sum.count}개 센터</td><td>${won(sum.pay)}</td>${prev ? `<td>${diffCell(sum.diff)}</td>` : ''}</tr>`;
+      <td class="l opt">${esc(r.dept)}</td><td class="l opt">${esc(r.mgr)}</td><td>${r.pay == null ? '<span class="zero">이번달 없음</span>' : won(r.pay)}</td>${diffTd(r.diff)}</tr>`).join('');
+    body += `<tr class="sum"><td class="l">합계 <span class="code m-only">${sum.count}개</span></td><td class="l opt" colspan="2">${sum.count}개 센터</td><td>${won(sum.pay)}</td>${prev ? `<td>${diffCell(sum.diff)}</td>` : ''}</tr>`;
   } else {
     const isB = tab === 'branch';
     const groups = sorted(groupBy(list, r => isB ? r.dept : r.dept + '\u0000' + r.mgr), 'key');
-    head = `${isB ? '' : '<th class="l">지사</th>'}<th class="l sortable" data-sort="key">${isB ? '지사' : '담당'}${arrow('key')}</th>
+    head = `${isB ? '' : '<th class="l opt">지사</th>'}<th class="l sortable" data-sort="key">${isB ? '지사' : '담당'}${arrow('key')}</th>
       <th class="sortable" data-sort="count">센터 수${arrow('count')}</th><th class="sortable" data-sort="pay">${mon(cur.month)} 납부금액${arrow('pay')}</th>${diffHead}`;
     body = groups.map(g => `<tr class="click" data-dept="${esc(g.dept)}" data-mgr="${isB ? '' : esc(g.mgr)}">
-      ${isB ? '' : `<td class="l">${esc(g.dept)}</td>`}<td class="l name">${esc(isB ? g.dept : g.mgr)}</td>
+      ${isB ? '' : `<td class="l opt">${esc(g.dept)}</td>`}<td class="l name">${esc(isB ? g.dept : g.mgr)}</td>
       <td>${g.count.toLocaleString()}</td><td>${won(g.pay)}</td>${diffTd(g.diff)}</tr>`).join('');
-    body += `<tr class="sum">${isB ? '' : '<td></td>'}<td class="l">합계</td><td>${sum.count.toLocaleString()}</td><td>${won(sum.pay)}</td>${prev ? `<td>${diffCell(sum.diff)}</td>` : ''}</tr>`;
+    body += `<tr class="sum">${isB ? '' : '<td class="opt"></td>'}<td class="l">합계</td><td>${sum.count.toLocaleString()}</td><td>${won(sum.pay)}</td>${prev ? `<td>${diffCell(sum.diff)}</td>` : ''}</tr>`;
   }
   $('tabbody').innerHTML = list.length
     ? `<div class="tbl"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
@@ -571,7 +603,11 @@ function detailTable(bp, bc) {
   const g = f => [bp?.[f] || 0, bc?.[f] || 0];
   const row = (label, f, sign = 1, cls = '') => {
     const [a, b] = g(f);
-    return `<tr class="${cls}"><td class="l">${label}</td><td>${won(a)}</td><td>${won(b)}</td><td>${diffCell(b - a)}</td><td>${diffCell((b - a) * sign)}</td></tr>`;
+    // 모바일에서는 data-m 으로 월 이름을 붙여 세로 배치, 증감과 같은 납부 영향(same)은 숨긴다
+    return `<tr class="${cls}"><td class="l c-label">${label}</td><td class="c-prev" data-m="${mon(prev.month)}">${won(a)}</td>` +
+      `<td class="c-cur" data-m="${mon(cur.month)}">${won(b)}</td><td class="c-diff">${diffCell(b - a)}</td>` +
+      `<td class="c-eff${sign === 1 ? ' same' : ''}" data-m="납부 영향">${diffCell((b - a) * sign)}</td>` +
+      `<td class="c-vals m-cell">${mon(prev.month)}&nbsp;${won(a)} → ${mon(cur.month)}&nbsp;${won(b)}</td></tr>`;
   };
   const changed = f => { const [a, b] = g(f); return a !== b; };
   const chItems = items.filter(changed);
