@@ -695,16 +695,18 @@ $('install').addEventListener('click', async () => {
 // 브라우저가 바탕화면 아이콘을 만들어 주지 않았을 때를 위한 안내 + 바탕화면에 바로 저장
 function showDesktopIconHelp(justInstalled) {
   const appsPage = isEdge ? 'edge://apps' : 'chrome://apps';
-  $('installBody').innerHTML = `${justInstalled ? '<b>설치되었습니다.</b> ' : ''}바탕화면에 아이콘이 없다면 아래 <b>바탕화면에 아이콘 저장</b>을 누르고, 저장 위치가 <b>바탕 화면</b>인지 확인한 뒤 저장하세요.
+  $('installBody').innerHTML = `${justInstalled ? '<b>설치되었습니다.</b> ' : ''}바탕화면에 아이콘이 없다면 아래 <b>바로가기 파일 받기</b>를 누른 뒤, 받은 파일을 <b>바탕화면으로 옮기세요</b>.
     <div class="alt">${isEdge
       ? '엣지는 설치 직후 뜨는 창에서 <b>바탕 화면 바로 가기 만들기</b>를 체크해도 앱 아이콘이 생깁니다. 나중에는 주소창에 <b>edge://apps</b> 입력 → 앱의 ⋯ → <b>바탕 화면 바로 가기 만들기</b>.'
       : `크롬 앱 아이콘으로 만들려면 주소창에 <b>${appsPage}</b> 입력 → 앱 아이콘 마우스 오른쪽 클릭 → <b>바로가기 만들기</b> → <b>바탕화면</b> 체크.`}</div>`;
-  $('installBtns').innerHTML = '<button class="btn primary" type="button" id="dlShortcut">바탕화면에 아이콘 저장</button><button class="btn" value="close">닫기</button>';
+  $('installBtns').innerHTML = '<button class="btn primary" type="button" id="dlShortcut">바로가기 파일 받기</button><button class="btn" value="close">닫기</button>';
   $('dlShortcut').addEventListener('click', saveShortcut);
   if (!$('installDialog').open) $('installDialog').showModal();
 }
 
-// 윈도우 인터넷 바로가기(.url, 앱 아이콘 포함) / 맥 .webloc. 가능하면 저장 창을 바탕화면에서 연다
+// 윈도우 인터넷 바로가기(.url, 앱 아이콘 포함) / 맥 .webloc.
+// 크롬 저장 창(showSaveFilePicker)은 .url 같은 바로가기 확장자를 막고 파일명을 "download"로 바꾸므로
+// .url은 항상 일반 다운로드로 받고, 저장 창은 맥(.webloc)에서만 쓴다.
 async function saveShortcut() {
   const url = location.origin + '/';
   const mac = /Mac/.test(ua) && !isWindows;
@@ -713,7 +715,7 @@ async function saveShortcut() {
     : [`[InternetShortcut]\r\nURL=${url}\r\nIconFile=${location.origin}/icons/app.ico\r\nIconIndex=0\r\n`, 'url'];
   const blob = new Blob([body], { type: 'application/octet-stream' });
   const name = `${SHORTCUT_NAME}.${ext}`;
-  if (window.showSaveFilePicker) {
+  if (mac && window.showSaveFilePicker) {
     try {
       const h = await showSaveFilePicker({ suggestedName: name, startIn: 'desktop',
         types: [{ description: '바로 가기', accept: { 'application/octet-stream': ['.' + ext] } }] });
@@ -729,7 +731,10 @@ async function saveShortcut() {
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  showMsg('다운로드 폴더에 받은 바로가기 파일을 바탕화면으로 옮겨주세요.', 'ok');
+  $('installBody').innerHTML = `<b>「${name}」</b> 파일을 받았습니다. 브라우저의 <b>다운로드 목록</b>(또는 다운로드 폴더)에서 이 파일을 <b>바탕화면으로 끌어다 놓으면</b> 아이콘이 됩니다.
+    <div class="alt">"위험할 수 있는 파일" 경고가 뜨면 <b>보관</b>을 누르세요. 이 파일은 사이트 주소만 담긴 바로가기입니다.</div>`;
+  $('installBtns').innerHTML = '<button class="btn" value="close">닫기</button>';
+  if (!$('installDialog').open) $('installDialog').showModal();
 }
 
 function showInstallHelp() {
@@ -748,8 +753,8 @@ function showInstallHelp() {
   } else {
     html = `<ol><li>크롬·엣지: 주소창 오른쪽의 <b>설치 아이콘</b>(⊕ 또는 모니터 모양)을 누르거나, 메뉴(⋮ / …) → <b>앱 설치</b> 또는 <b>이 사이트를 앱으로 설치</b>를 누릅니다.</li>
       <li>설치 후 바탕화면에 아이콘이 없으면 앱 창에서 「바탕화면 아이콘 만들기」를 누르세요.</li></ol>
-      <div class="alt">설치 메뉴가 없다면 아래 버튼으로 <b>바탕화면에 아이콘</b>을 바로 저장할 수 있습니다.</div>`;
-    extra = `<button class="btn primary" type="button" id="dlShortcut">바탕화면에 아이콘 저장</button>`;
+      <div class="alt">설치 메뉴가 없다면 아래 버튼으로 <b>바로가기 파일</b>을 받아 바탕화면에 두세요.</div>`;
+    extra = `<button class="btn primary" type="button" id="dlShortcut">바로가기 파일 받기</button>`;
   }
   $('installBody').innerHTML = html;
   $('installBtns').innerHTML = extra + '<button class="btn" value="close">닫기</button>';
