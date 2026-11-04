@@ -666,21 +666,71 @@ const isAndroid = /Android/i.test(ua);
 const isSamsung = /SamsungBrowser/i.test(ua);
 const isWindows = /Windows/i.test(ua);
 
-if (isStandalone()) $('install').hidden = true; // 이미 바로가기로 연 경우
+const isMobile = isIOS || isAndroid;
+const isEdge = /Edg\//.test(ua);
+const SHORTCUT_NAME = '지대 납부금액 조회';
+
+// 설치된 앱 창에서 열었을 때: 모바일은 버튼 숨김, PC는 바탕화면 아이콘 만들기로 전환
+function setInstalledMode() {
+  if (isMobile) { $('install').hidden = true; return; }
+  $('install').textContent = '＋ 바탕화면 아이콘 만들기';
+}
+if (isStandalone()) setInstalledMode();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; });
-addEventListener('appinstalled', () => { $('install').hidden = true; installPrompt = null; });
+addEventListener('appinstalled', () => { installPrompt = null; setInstalledMode(); });
 
 $('install').addEventListener('click', async () => {
+  if (isStandalone() && !isMobile) return showDesktopIconHelp(false);
   if (installPrompt) {               // 크롬·엣지·안드로이드: 브라우저 설치 창 바로 띄우기
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     installPrompt = null;
-    if (outcome === 'accepted') $('install').hidden = true;
+    if (outcome === 'accepted') { setInstalledMode(); if (!isMobile) showDesktopIconHelp(true); }
     return;
   }
   showInstallHelp();
 });
+
+// 브라우저가 바탕화면 아이콘을 만들어 주지 않았을 때를 위한 안내 + 바탕화면에 바로 저장
+function showDesktopIconHelp(justInstalled) {
+  const appsPage = isEdge ? 'edge://apps' : 'chrome://apps';
+  $('installBody').innerHTML = `${justInstalled ? '<b>설치되었습니다.</b> ' : ''}바탕화면에 아이콘이 없다면 아래 <b>바탕화면에 아이콘 저장</b>을 누르고, 저장 위치가 <b>바탕 화면</b>인지 확인한 뒤 저장하세요.
+    <div class="alt">${isEdge
+      ? '엣지는 설치 직후 뜨는 창에서 <b>바탕 화면 바로 가기 만들기</b>를 체크해도 앱 아이콘이 생깁니다. 나중에는 주소창에 <b>edge://apps</b> 입력 → 앱의 ⋯ → <b>바탕 화면 바로 가기 만들기</b>.'
+      : `크롬 앱 아이콘으로 만들려면 주소창에 <b>${appsPage}</b> 입력 → 앱 아이콘 마우스 오른쪽 클릭 → <b>바로가기 만들기</b> → <b>바탕화면</b> 체크.`}</div>`;
+  $('installBtns').innerHTML = '<button class="btn primary" type="button" id="dlShortcut">바탕화면에 아이콘 저장</button><button class="btn" value="close">닫기</button>';
+  $('dlShortcut').addEventListener('click', saveShortcut);
+  if (!$('installDialog').open) $('installDialog').showModal();
+}
+
+// 윈도우 인터넷 바로가기(.url, 앱 아이콘 포함) / 맥 .webloc. 가능하면 저장 창을 바탕화면에서 연다
+async function saveShortcut() {
+  const url = location.origin + '/';
+  const mac = /Mac/.test(ua) && !isWindows;
+  const [body, ext] = mac
+    ? [`<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>URL</key><string>${url}</string></dict></plist>\n`, 'webloc']
+    : [`[InternetShortcut]\r\nURL=${url}\r\nIconFile=${location.origin}/icons/app.ico\r\nIconIndex=0\r\n`, 'url'];
+  const blob = new Blob([body], { type: 'application/octet-stream' });
+  const name = `${SHORTCUT_NAME}.${ext}`;
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await showSaveFilePicker({ suggestedName: name, startIn: 'desktop',
+        types: [{ description: '바로 가기', accept: { 'application/octet-stream': ['.' + ext] } }] });
+      const w = await h.createWritable(); await w.write(blob); await w.close();
+      $('installDialog').close();
+      return showMsg('바탕화면에 아이콘을 저장했습니다.', 'ok');
+    } catch (e) {
+      if (e.name === 'AbortError') return;   // 사용자가 저장 창을 닫음
+    }
+  }
+  const a = document.createElement('a');     // 저장 창을 못 쓰는 브라우저: 다운로드 폴더로 받기
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  showMsg('다운로드 폴더에 받은 바로가기 파일을 바탕화면으로 옮겨주세요.', 'ok');
+}
 
 function showInstallHelp() {
   const url = location.origin + '/';
@@ -697,23 +747,14 @@ function showInstallHelp() {
     html = `<ol><li>오른쪽 위 <b>메뉴(⋮)</b>를 누릅니다.</li><li><b>홈 화면에 추가</b> 또는 <b>앱 설치</b>를 누릅니다.</li></ol>`;
   } else {
     html = `<ol><li>크롬·엣지: 주소창 오른쪽의 <b>설치 아이콘</b>(⊕ 또는 모니터 모양)을 누르거나, 메뉴(⋮ / …) → <b>앱 설치</b> 또는 <b>이 사이트를 앱으로 설치</b>를 누릅니다.</li>
-      <li>설치하면 바탕화면과 시작 메뉴에 아이콘이 생깁니다.</li></ol>
-      <div class="alt">설치 메뉴가 없다면 아래 버튼으로 <b>바탕화면 바로가기 파일</b>을 받아 바탕화면에 두세요.</div>`;
-    extra = `<button class="btn primary" type="button" id="dlShortcut">바로가기 파일 받기</button>`;
+      <li>설치 후 바탕화면에 아이콘이 없으면 앱 창에서 「바탕화면 아이콘 만들기」를 누르세요.</li></ol>
+      <div class="alt">설치 메뉴가 없다면 아래 버튼으로 <b>바탕화면에 아이콘</b>을 바로 저장할 수 있습니다.</div>`;
+    extra = `<button class="btn primary" type="button" id="dlShortcut">바탕화면에 아이콘 저장</button>`;
   }
   $('installBody').innerHTML = html;
   $('installBtns').innerHTML = extra + '<button class="btn" value="close">닫기</button>';
   $('openExternal')?.addEventListener('click', () => { location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url); });
-  $('dlShortcut')?.addEventListener('click', () => {
-    const [body, ext] = isWindows || !/Mac/.test(ua)
-      ? [`[InternetShortcut]\r\nURL=${url}\r\n`, 'url']
-      : [`<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>URL</key><string>${url}</string></dict></plist>\n`, 'webloc'];
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([body], { type: 'application/octet-stream' }));
-    a.download = `센터 지대 납부금액 조회.${ext}`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  });
+  $('dlShortcut')?.addEventListener('click', saveShortcut);
   $('installDialog').showModal();
 }
 
