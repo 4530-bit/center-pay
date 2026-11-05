@@ -635,8 +635,40 @@ $('replace').addEventListener('click', () => $('file').click());
 ['dragenter', 'dragover'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
 document.addEventListener('drop', e => { if (e.dataTransfer?.files?.length) handleFiles([...e.dataTransfer.files]); });
-$('q').addEventListener('input', update);
-$('clear').addEventListener('click', () => { $('q').value = ''; update(); $('q').focus(); });
+// 센터 조회 화면은 방문 기록 한 칸을 차지해, 뒤로가기(휴대폰 뒤로 버튼 포함)·Backspace로 메인 목록에 돌아온다
+let mainScroll = 0;
+const inDetail = () => history.state?.detail === true;
+if (inDetail()) history.replaceState(null, ''); // 새로고침 후 남은 조회 기록 정리
+function enterDetail() {
+  if (inDetail()) return;
+  mainScroll = scrollY;
+  history.pushState({ detail: true }, '');
+}
+function goMain() {
+  if (inDetail()) history.back();          // popstate에서 화면 정리
+  else { $('q').value = ''; update(); }
+}
+addEventListener('popstate', () => {
+  if (inDetail() || !$('q').value) return;
+  $('q').value = '';
+  update();
+  scrollTo(0, mainScroll);
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Backspace' && e.key !== 'Escape') return;
+  if ($('results').hidden || document.querySelector('dialog[open]')) return;
+  const t = e.target;
+  if (t.closest?.('input, select, textarea, [contenteditable]')) return; // 입력 중인 글자는 그대로 지움
+  e.preventDefault();
+  goMain();
+});
+
+$('q').addEventListener('input', () => {
+  if ($('q').value.trim()) enterDetail();
+  else if (inDetail()) history.back();     // 검색어를 다 지우면 기록도 정리
+  update();
+});
+$('clear').addEventListener('click', () => { goMain(); $('q').focus(); });
 document.querySelector('.tabs').addEventListener('click', e => {
   const b = e.target.closest('button[data-tab]');
   if (!b) return;
@@ -651,7 +683,7 @@ $('tabbody').addEventListener('click', e => {
   }
   const tr = e.target.closest('tr.click');
   if (!tr) return;
-  if (tr.dataset.code) { $('q').value = tr.dataset.code; update(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  if (tr.dataset.code) { enterDetail(); $('q').value = tr.dataset.code; update(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   // 행을 누르면 다음 탭의 필터만 그 행으로 맞춘다
   if (tab === 'branch') { filters.manager.branch = tr.dataset.dept; tab = 'manager'; }
   else { filters.center.branch = tr.dataset.dept; filters.center.mgr = tr.dataset.mgr || ''; tab = 'center'; }
